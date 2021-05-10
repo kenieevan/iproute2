@@ -53,7 +53,8 @@ static void print_procfs_data(FILE *fp, uint32_t pid)
 		fprintf(fp, "[cmdline %d:", pid);
 		while ((nread = getdelim(&arg, &n, 0, cmdline)) != -1) {
 			fprintf(fp, " ");
-			fwrite(arg, nread, 1, fp);
+			if (nread > 1)
+				fwrite(arg, nread-1, 1, fp);
 		}
 		free(arg);
 		fprintf(fp, "]");
