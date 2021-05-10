@@ -37,7 +37,46 @@ static void usage(void)
 	exit(-1);
 }
 
-static void print_headers(FILE *fp, char *label, struct rtnl_ctrl_data *ctrl)
+static void print_procfs_data(FILE *fp, uint32_t pid)
+{
+	if (pid == 0)
+		return;
+
+	char filename[128];
+	snprintf(filename, 128, "/proc/%d/cmdline", pid);
+
+	FILE *cmdline = fopen(filename, "r");
+	if (cmdline != NULL) {
+		char *arg = NULL;
+		size_t n = 0;
+		ssize_t nread = 0;
+		fprintf(fp, "[cmdline %d:", pid);
+		while ((nread = getdelim(&arg, &n, 0, cmdline)) != -1) {
+			fprintf(fp, " ");
+			fwrite(arg, nread, 1, fp);
+		}
+		free(arg);
+		fprintf(fp, "]");
+		fclose(cmdline);
+	}
+
+	if (pid > 1) {
+		snprintf(filename, 128, "/proc/%d/stat", pid);
+		FILE *stat = fopen(filename, "r");
+		if (stat != NULL) {
+			uint32_t ppid = 0;
+			int n = fscanf(stat, "%*d %*s %*c %d", &ppid);
+			fclose(stat);
+
+			if (n == 1) {
+				fprintf(fp, "[ppid %d: %d]", pid, ppid);
+				print_procfs_data(fp, ppid);
+			}
+		}
+	}
+}
+
+static void print_headers(FILE *fp, char *label, struct rtnl_ctrl_data *ctrl, struct nlmsghdr *n)
 {
 	if (timestamp)
 		print_timestamp(fp);
@@ -51,6 +90,15 @@ static void print_headers(FILE *fp, char *label, struct rtnl_ctrl_data *ctrl)
 
 	if (prefix_banner)
 		fprintf(fp, "%s", label);
+
+	if (n) {
+		uint32_t pid = n->nlmsg_pid;
+		if (pid > 0) {
+			fprintf(fp, "[pid %d]", pid);
+			print_procfs_data(fp, pid);
+		}
+	}
+
 }
 
 static int accept_msg(struct rtnl_ctrl_data *ctrl,
@@ -74,11 +122,11 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 
 		if (r->rtm_family == RTNL_FAMILY_IPMR ||
 		    r->rtm_family == RTNL_FAMILY_IP6MR) {
-			print_headers(fp, "[MROUTE]", ctrl);
+			print_headers(fp, "[MROUTE]", ctrl, n);
 			print_mroute(n, arg);
 			return 0;
 		} else {
-			print_headers(fp, "[ROUTE]", ctrl);
+			print_headers(fp, "[ROUTE]", ctrl, n);
 			print_route(n, arg);
 			return 0;
 		}
@@ -86,26 +134,26 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 
 	case RTM_NEWNEXTHOP:
 	case RTM_DELNEXTHOP:
-		print_headers(fp, "[NEXTHOP]", ctrl);
+		print_headers(fp, "[NEXTHOP]", ctrl, n);
 		print_nexthop(n, arg);
 		return 0;
 
 	case RTM_NEWLINK:
 	case RTM_DELLINK:
 		ll_remember_index(n, NULL);
-		print_headers(fp, "[LINK]", ctrl);
+		print_headers(fp, "[LINK]", ctrl, n);
 		print_linkinfo(n, arg);
 		return 0;
 
 	case RTM_NEWADDR:
 	case RTM_DELADDR:
-		print_headers(fp, "[ADDR]", ctrl);
+		print_headers(fp, "[ADDR]", ctrl, n);
 		print_addrinfo(n, arg);
 		return 0;
 
 	case RTM_NEWADDRLABEL:
 	case RTM_DELADDRLABEL:
-		print_headers(fp, "[ADDRLABEL]", ctrl);
+		print_headers(fp, "[ADDRLABEL]", ctrl, n);
 		print_addrlabel(n, arg);
 		return 0;
 
@@ -119,18 +167,18 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 				return 0;
 		}
 
-		print_headers(fp, "[NEIGH]", ctrl);
+		print_headers(fp, "[NEIGH]", ctrl, n);
 		print_neigh(n, arg);
 		return 0;
 
 	case RTM_NEWPREFIX:
-		print_headers(fp, "[PREFIX]", ctrl);
+		print_headers(fp, "[PREFIX]", ctrl, n);
 		print_prefix(n, arg);
 		return 0;
 
 	case RTM_NEWRULE:
 	case RTM_DELRULE:
-		print_headers(fp, "[RULE]", ctrl);
+		print_headers(fp, "[RULE]", ctrl, n);
 		print_rule(n, arg);
 		return 0;
 
@@ -140,13 +188,13 @@ static int accept_msg(struct rtnl_ctrl_data *ctrl,
 
 	case RTM_NEWNETCONF:
 	case RTM_DELNETCONF:
-		print_headers(fp, "[NETCONF]", ctrl);
+		print_headers(fp, "[NETCONF]", ctrl, n);
 		print_netconf(ctrl, n, arg);
 		return 0;
 
 	case RTM_DELNSID:
 	case RTM_NEWNSID:
-		print_headers(fp, "[NSID]", ctrl);
+		print_headers(fp, "[NSID]", ctrl, n);
 		print_nsid(n, arg);
 		return 0;
 
