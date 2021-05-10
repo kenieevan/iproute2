@@ -39,7 +39,7 @@ static void usage(void)
 
 static void print_procfs_data(FILE *fp, uint32_t pid)
 {
-	if (pid == 0)
+	if (pid == 0 || pid == 1)
 		return;
 
 	char filename[128];
@@ -61,18 +61,16 @@ static void print_procfs_data(FILE *fp, uint32_t pid)
 		fclose(cmdline);
 	}
 
-	if (pid > 1) {
-		snprintf(filename, 128, "/proc/%d/stat", pid);
-		FILE *stat = fopen(filename, "r");
-		if (stat != NULL) {
-			uint32_t ppid = 0;
-			int n = fscanf(stat, "%*d %*s %*c %d", &ppid);
-			fclose(stat);
+	snprintf(filename, 128, "/proc/%d/stat", pid);
+	FILE *stat = fopen(filename, "r");
+	if (stat != NULL) {
+		uint32_t ppid = 0;
+		int n = fscanf(stat, "%*d %*s %*c %d", &ppid);
+		fclose(stat);
 
-			if (n == 1) {
-				fprintf(fp, "[ppid %d: %d]", pid, ppid);
-				print_procfs_data(fp, ppid);
-			}
+		if (n == 1) {
+			fprintf(fp, "[ppid %d: %d]", pid, ppid);
+			print_procfs_data(fp, ppid);
 		}
 	}
 }
