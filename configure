@@ -323,6 +323,29 @@ check_cap()
 	fi
 }
 
+# for kernel version >= 4.15, bpf prog name support is ok
+check_bpf_prog_name()
+{
+        major=`uname -r | awk -F . '{print $1}'`
+        if [ $major > '4' ]
+        then
+		echo "yes"
+		echo "CFLAGS += -DPROG_NAME" >> $CONFIG
+        elif [ $major == '4' ]
+        then
+                minor=`uname -r | awk -F . '{print $2}'`
+                if [ $minor > '14' ]
+                then
+			echo "yes"
+			echo "CFLAGS += -DPROG_NAME" >> $CONFIG
+                else
+                        echo "no"
+                fi
+        else
+                echo "no"
+        fi
+}
+
 quiet_config()
 {
 	cat <<EOF
@@ -397,6 +420,9 @@ check_strlcpy
 
 echo -n "libcap support: "
 check_cap
+
+echo -n "check bpf prog name support: "
+check_bpf_prog_name
 
 echo >> $CONFIG
 echo "%.o: %.c" >> $CONFIG
